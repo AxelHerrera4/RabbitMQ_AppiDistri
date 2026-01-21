@@ -1,10 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, UUID4
 from typing import List, Optional
 from datetime import datetime
+from uuid import UUID
 
 # --- Esquemas de Entrada (Request) ---
 class OrderItemBase(BaseModel):
-    productId: str
+    productId: UUID4
     quantity: int
 
 class ShippingAddress(BaseModel):
@@ -14,15 +15,15 @@ class ShippingAddress(BaseModel):
     postalCode: str
 
 class OrderCreateRequest(BaseModel):
-    customerId: str
+    customerId: UUID4
     items: List[OrderItemBase]
     shippingAddress: ShippingAddress
     paymentReference: str
 
 # --- Esquemas de Salida (Response) ---
 class OrderResponse(BaseModel):
-    orderId: str
-    customerId: str
+    orderId: UUID4
+    customerId: UUID4
     status: str
     reason: Optional[str] = None
     items: List[OrderItemBase]
@@ -34,6 +35,6 @@ class OrderResponse(BaseModel):
 # --- Esquemas de Eventos RabbitMQ ---
 class OrderCreatedEvent(BaseModel):
     eventType: str = "OrderCreated"
-    orderId: str
-    correlationId: str
+    orderId: UUID4
+    correlationId: UUID4
     items: List[OrderItemBase]

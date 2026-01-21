@@ -22,7 +22,7 @@ def create_order(order_req: schemas.OrderCreateRequest, db: Session = Depends(da
     # 2. Guardar en DB con estado PENDING
     db_order = models.Order(
         order_id=new_order_id,
-        customer_id=order_req.customerId,
+        customer_id=str(order_req.customerId),
         status="PENDING"
     )
     db.add(db_order)
@@ -32,7 +32,7 @@ def create_order(order_req: schemas.OrderCreateRequest, db: Session = Depends(da
     for item in order_req.items:
         db_item = models.OrderItem(
             order_id=new_order_id,
-            product_id=item.productId,
+            product_id=str(item.productId),
             quantity=item.quantity
         )
         db.add(db_item)
@@ -43,7 +43,7 @@ def create_order(order_req: schemas.OrderCreateRequest, db: Session = Depends(da
         "eventType": "OrderCreated",
         "orderId": new_order_id,
         "correlationId": correlation_id,
-        "items": [item.dict() for item in order_req.items]
+        "items": [{"productId": str(item.productId), "quantity": item.quantity} for item in order_req.items]
     }
     rabbitmq.publish_order_created(event_data)
 
@@ -61,5 +61,18 @@ def get_order(orderId: str, db: Session = Depends(database.get_db)):
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    # Mapeo manual simple para ajustar a la respuesta
-    return order
+    # Construir respuesta con conversión correcta
+    return {
+        "orderId": uuid.UUID(order.order_id),
+        "customerId": uuid.UUID(order.customer_id),
+        "status": order.status,
+        "reason": order.reason,
+        "items": [
+            {
+                "productId": uuid.UUID(item.product_id),
+                "quantity": item.quantity
+            }
+            for item in order.items
+        ],
+        "updatedAt": order.updated_at
+    }

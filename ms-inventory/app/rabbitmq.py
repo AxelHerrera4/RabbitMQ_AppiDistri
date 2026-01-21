@@ -1,6 +1,7 @@
 import json
 import pika
 import threading
+from datetime import datetime
 from sqlalchemy.orm import Session
 from .database import SessionLocal, engine
 from .models import ProductStock, Base
@@ -36,6 +37,8 @@ def process_order_event(body):
     data = json.loads(body)
     event = OrderCreatedEvent(**data)
     
+    print(f" [x] Procesando OrderCreated para orden {event.orderId}")
+    
     db: Session = SessionLocal()
     try:
         # Verificar stock para TODOS los items
@@ -44,7 +47,7 @@ def process_order_event(body):
         
         # Primero solo verificamos
         for item in event.items:
-            product = db.query(ProductStock).filter(ProductStock.product_id == item.productId).first()
+            product = db.query(ProductStock).filter(ProductStock.product_id == str(item.productId)).first()
             if not product or product.available_stock < item.quantity:
                 can_fulfill = False
                 reason = f"Insufficient stock for product {item.productId}"
@@ -54,30 +57,32 @@ def process_order_event(body):
             # Transacción: Reservar stock
             reserved_items = []
             for item in event.items:
-                product = db.query(ProductStock).filter(ProductStock.product_id == item.productId).first()
+                product = db.query(ProductStock).filter(ProductStock.product_id == str(item.productId)).first()
                 product.available_stock -= item.quantity
                 product.reserved_stock += item.quantity
-                reserved_items.append({"productId": item.productId, "quantity": item.quantity})
+                reserved_items.append({"productId": str(item.productId), "quantity": item.quantity})
             
             db.commit()
             
-            # Crear evento StockReserved [cite: 263]
+            # Crear evento StockReserved
             response_event = {
                 "eventType": "StockReserved",
-                "orderId": event.orderId,
-                "correlationId": event.correlationId,
+                "orderId": str(event.orderId),
+                "correlationId": str(event.correlationId),
                 "reservedItems": reserved_items,
                 "reservedAt": str(datetime.now())
             }
+            print(f" [✓] Stock reservado para orden {event.orderId}")
         else:
-            # Crear evento StockRejected [cite: 292]
+            # Crear evento StockRejected
             response_event = {
                 "eventType": "StockRejected",
-                "orderId": event.orderId,
-                "correlationId": event.correlationId,
+                "orderId": str(event.orderId),
+                "correlationId": str(event.correlationId),
                 "reason": reason,
                 "rejectedAt": str(datetime.now())
             }
+            print(f" [x] Stock rechazado para orden {event.orderId}: {reason}")
 
         publish_event(response_event)
 

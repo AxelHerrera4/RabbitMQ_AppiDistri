@@ -43,19 +43,25 @@ def process_inventory_response(body):
     try:
         order = db.query(Order).filter(Order.order_id == order_id).first()
         if not order:
-            print("Orden no encontrada")
+            print(f"Orden {order_id} no encontrada")
             return
 
         if event_type == "StockReserved":
             order.status = "CONFIRMED"
-            print(f"Orden {order_id} CONFIRMADA")
+            order.reason = None
+            print(f" [✓] Orden {order_id} CONFIRMADA")
         
         elif event_type == "StockRejected":
             order.status = "CANCELLED"
             order.reason = data.get("reason", "Unknown reason")
-            print(f"Orden {order_id} CANCELADA. Razón: {order.reason}")
+            print(f" [x] Orden {order_id} CANCELADA. Razón: {order.reason}")
+        
+        else:
+            print(f"Evento desconocido: {event_type}")
+            return
             
         db.commit()
+        print(f" [→] Estado de orden {order_id} actualizado a {order.status}")
     except Exception as e:
         print(f"Error actualizando orden: {e}")
         db.rollback()
